@@ -95,7 +95,7 @@ void usb_detach(usb_dev_handle *lvr_winusb, int iInterface) {
 	}
 } 
 
-usb_dev_handle* setup_libusb_access() {
+usb_dev_handle* setup_libusb_access(int devicenum) {
      usb_dev_handle *lvr_winusb;
 
      if(debug) {
@@ -108,7 +108,7 @@ usb_dev_handle* setup_libusb_access() {
      usb_find_devices();
              
  
-     if(!(lvr_winusb = find_lvr_winusb())) {
+     if(!(lvr_winusb = find_lvr_winusb(devicenum))) {
                 printf("Couldn't find the USB device, Exiting\n");
                 return NULL;
         }
@@ -142,15 +142,19 @@ usb_dev_handle* setup_libusb_access() {
  
  
  
-usb_dev_handle *find_lvr_winusb() {
- 
-     struct usb_bus *bus;
+usb_dev_handle *find_lvr_winusb(int devicenum) {
+        // iterates to the devicenum'th device for installations with multiple sensors
+        struct usb_bus *bus;
         struct usb_device *dev;
  
         for (bus = usb_busses; bus; bus = bus->next) {
         for (dev = bus->devices; dev; dev = dev->next) {
                         if (dev->descriptor.idVendor == VENDOR_ID && 
                                 dev->descriptor.idProduct == PRODUCT_ID ) {
+                                if (devicenum>0) {
+                                  devicenum--;
+                                  continue;
+                                }
                                 usb_dev_handle *handle;
                                 if(debug) {
                                   printf("lvr_winusb with Vendor Id: %x and Product Id: %x found.\n", VENDOR_ID, PRODUCT_ID);
@@ -311,12 +315,21 @@ int main( int argc, char **argv) {
      int c;
      struct tm *local;
      time_t t;
+     int devicenum = 0;
 
-     while ((c = getopt (argc, argv, "mfcvhl::a:")) != -1)
+     while ((c = getopt (argc, argv, "mfcvhn:l::a:")) != -1)
      switch (c)
        {
        case 'v':
          debug = 1;
+         break;
+       case 'n':
+         if (optarg != NULL) {
+           if (!sscanf(optarg,"%i",&devicenum)==1) {
+             fprintf (stderr, "Error: '%s' is not numeric.\n", optarg);
+             exit(EXIT_FAILURE);
+           }
+         }
          break;
        case 'c':
          formato=1; //Celsius
@@ -354,6 +367,7 @@ int main( int argc, char **argv) {
 	 printf("      Aviable options:\n");
 	 printf("          -h help\n");
 	 printf("          -v verbose\n");
+	 printf("          -n[i] use device number i (0 is the first one found on the bus)\n");
 	 printf("          -l[n] loop every 'n' seconds, default value is 5s\n");
 	 printf("          -c output only in Celsius\n");
 	 printf("          -f output only in Fahrenheit\n");
@@ -376,7 +390,7 @@ int main( int argc, char **argv) {
         exit(EXIT_FAILURE);
      }
  
-     if ((lvr_winusb = setup_libusb_access()) == NULL) {
+     if ((lvr_winusb = setup_libusb_access(devicenum)) == NULL) {
          exit(EXIT_FAILURE);
      } 
 
